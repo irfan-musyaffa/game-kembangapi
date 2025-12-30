@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Game Simulator Irfan</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden; /* Biar gak ada scroll */
+      background: linear-gradient(#87CEEB, #E0F6FF); /* Warna Langit */
+      font-family: sans-serif;
+    }
+    #game-container {
+        position: relative;
+        width: 100%;
+        height: 100vh;
+    }
+    canvas {
+      display: block;
+      cursor: crosshair; /* Kursor jadi tanda tambah buat membidik */
+    }
+    #ui {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        font-size: 24px;
+        font-weight: bold;
+        color: #FFD700; /* Warna Emas */
+        text-shadow: 2px 2px 4px #000;
+        pointer-events: none;
+    }
+    #game-over {
+        display: none;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: red;
+        font-size: 40px;
+        text-align: center;
+        text-shadow: 2px 2px 0 white;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+      <canvas id="langit"></canvas>
+      <div id="ui">⭐ Bintang: <span id="skor">0</span></div>
+      <div id="game-over">PESAWAT MENABRAK AWAN! 💥<br><span style="font-size:20px; color:black;">Klik layar untuk main lagi</span></div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('langit');
+    const ctx = canvas.getContext('2d');
+    const skorEl = document.getElementById('skor');
+    const gameOverEl = document.getElementById('game-over');
+
+    // Atur ukuran layar penuh
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    let skor = 0;
+    let gameBerjalan = true;
+    let kecepatan = 15; // Kecepatan benda bergerak ke kiri
+
+    // --- SI PESAWAT JET ---
+    const pesawat = {
+        x: 100, // Posisi dari kiri
+        y: canvas.height / 2, // Posisi ketinggian
+        lebar: 300,
+        tinggi: 150,
+        warna: 'gold'
+    };
+
+    // --- BENDA DI LANGIT ---
+    let awan = [];
+    let bintang = [];
+
+    // Fungsi untuk menggambar pesawat bentuk segitiga keren
+    function gambarPesawat(x, y) {
+        ctx.fillStyle = pesawat.warna;
+        ctx.beginPath();
+        ctx.moveTo(x + pesawat.lebar, y); // Moncong depan
+        ctx.lineTo(x, y - pesawat.tinggi/2); // Sayap atas
+        ctx.lineTo(x + 10, y); // Ekor belakang
+        ctx.lineTo(x, y + pesawat.tinggi/2); // Sayap bawah
+        ctx.closePath();
+        ctx.fill();
+        
+        // Kaca kokpit (biru muda)
+        ctx.fillStyle = '#ADD8E6';
+        ctx.beginPath();
+        ctx.arc(x + 40, y, 8, 0, Math.PI*2);
+        ctx.fill();
+    }
+
+    // Fungsi bikin Awan & Bintang baru muncul dari kanan
+    function munculkanBenda() {
+        if (!gameBerjalan) return;
+
+        // Acak: Kadang muncul awan, kadang bintang
+        if (Math.random() < 0.02) { // Muncul Bintang (Jarang)
+            bintang.push({
+                x: canvas.width,
+                y: Math.random() * (canvas.height - 50) + 25,
+                radius: 15,
+                warna: '#FFD700' // Emas
+            });
+        } else if (Math.random() < 0.03) { // Muncul Awan (Sering)
+            awan.push({
+                x: canvas.width,
+                y: Math.random() * (canvas.height - 100) + 50,
+                lebar: Math.random() * 60 + 50,
+                tinggi: Math.random() * 40 + 30,
+                warna: '#555555' // Abu-abu gelap (Awan Petir)
+            });
+        }
+    }
+
+    // --- KONTROL PESAWAT (PAKAI MOUSE) ---
+    canvas.addEventListener('mousemove', function(e) {
+        if (!gameBerjalan) return;
+        // Pesawat mengikuti ketinggian mouse
+        pesawat.y = e.clientY;
+    });
+
+    // Klik untuk restart kalau kalah
+    canvas.addEventListener('click', function() {
+        if (!gameBerjalan) {
+            document.location.reload();
+        }
+    });
+
+    // --- FUNGSI TABRAKAN ---
+    function cekTabrakanLingkaran(kotak, lingkaran) {
+        // Cek sederhana: apakah jaraknya dekat
+        let dx = kotak.x - lingkaran.x;
+        let dy = kotak.y - lingkaran.y;
+        let jarak = Math.sqrt(dx * dx + dy * dy);
+        return jarak < (kotak.lebar/2 + lingkaran.radius);
+    }
+
+    function cekTabrakanKotak(kotak1, kotak2) {
+        return (
+            kotak1.x < kotak2.x + kotak2.lebar &&
+            kotak1.x + kotak1.lebar > kotak2.x &&
+            kotak1.y - kotak1.tinggi/2 < kotak2.y + kotak2.tinggi &&
+            kotak1.y + kotak1.tinggi/2 > kotak2.y
+        );
+    }
+
+    // --- MESIN GAME UTAMA ---
+    function update() {
+        if (!gameBerjalan) return;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height); // Bersihkan layar
+        munculkanBenda();
+
+        // 1. Gambar Pesawat
+        gambarPesawat(pesawat.x, pesawat.y);
+
+        // 2. Update & Gambar Bintang
+        for (let i = bintang.length - 1; i >= 0; i--) {
+            let b = bintang[i];
+            b.x -= kecepatan; // Bergerak ke kiri
+            
+            // Gambar Bintang (Lingkaran Emas Berkilau)
+            ctx.fillStyle = b.warna;
+            ctx.beginPath(); ctx.arc(b.x, b.y, b.radius, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = 'white'; ctx.lineWidth = 2; ctx.stroke();
+
+            // Kalau kena bintang
+            if (cekTabrakanLingkaran(pesawat, b)) {
+                skor += 10;
+                skorEl.innerText = skor;
+                bintang.splice(i, 1); // Hapus bintangnya
+                // Makin banyak bintang, makin ngebut!
+                if (skor % 50 === 0) kecepatan += 1;
+            }
+            // Hapus kalau lewat layar kiri
+            else if (b.x + b.radius < 0) bintang.splice(i, 1);
+        }
+
+        // 3. Update & Gambar Awan Petir
+        for (let i = awan.length - 1; i >= 0; i--) {
+            let a = awan[i];
+            a.x -= kecepatan; // Bergerak ke kiri
+
+            // Gambar Awan (Kotak tumpul abu-abu)
+            ctx.fillStyle = a.warna;
+            ctx.beginPath();
+            ctx.roundRect(a.x, a.y, a.lebar, a.tinggi, 20);
+            ctx.fill();
+            // Gambar kilat kecil di awan
+             ctx.fillStyle = 'yellow'; ctx.fillRect(a.x+10, a.y+10, 5, 15);
+
+            // Kalau nabrak awan (GAME OVER)
+            if (cekTabrakanKotak(pesawat, a)) {
+                gameBerjalan = false;
+                gameOverEl.style.display = 'block';
+            }
+            // Hapus kalau lewat layar kiri
+            else if (a.x + a.lebar < 0) awan.splice(i, 1);
+        }
+
+        requestAnimationFrame(update);
+    }
+
+    // Biar layar tetap penuh kalau browser diubah ukurannya
+    window.addEventListener('resize', function() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    });
+
+    // MULAI!
+    update();
+  </script>
+</body>
+</html>
